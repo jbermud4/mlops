@@ -1,3 +1,8 @@
+"""
+Author: Jan Bermudez
+Description: A library for pandas data frame transformers
+Last Modified: 10/15/2023
+"""
 import pandas as pd
 import numpy as np
 import sklearn
@@ -133,3 +138,78 @@ class CustomOHETransformer(BaseEstimator, TransformerMixin):
     return result
 
 ########################################################################################################################################################
+
+class CustomSigma3Transformer(BaseEstimator, TransformerMixin):
+  def __init__(self, target_column):
+    assert isinstance(target_column, str), f'expected str but got {type(target_column)} instead.'
+    self.target_column = target_column
+    self.bounds = None
+
+  #define methods below
+  def fit(self, X):
+    assert isinstance(X, pd.core.frame.DataFrame), f'expected Dataframe but got {type(X)} instead.'
+    assert self.target_column in X.columns.to_list(), f'{self.__class__.__name__}.transform unknown column "{self.target_column}"'  #column legit?
+    
+    mean = X[self.target_column].mean()
+    std = X[self.target_column].std()
+    lower_bound = mean - (3 * std)
+    upper_bound = mean + (3 * std)
+    self.bounds = (lower_bound, upper_bound)
+    return self
+
+  def transform(self, X):
+    assert self.bounds != None, f'NotFittedError: This {self.__class__.__name__} instance is not fitted yet. Call "fit" with appropriate arguments before using this estimator.'
+    minb, maxb = self.bounds
+    X_ = X.copy()
+    X_[self.target_column] = X[self.target_column].clip(lower=minb, upper=maxb)
+    X_.reset_index(drop=True, inplace=True)
+    return X_
+
+  def fit_transform(self, X):
+    self.fit(X)
+    result = self.transform(X)
+    return result
+
+########################################################################################################################################################
+
+class CustomTukeyTransformer(BaseEstimator, TransformerMixin):
+  def __init__(self, target_column, fence='outer'):
+    assert fence in ['inner', 'outer']
+    assert isinstance(target_column, str), f'{self.__class__.__name__} constructor expected str for target_column but got {type(target_column)} instead.'
+    self.fence = fence
+    self.target_column = target_column
+    self.inner = None
+    self.outer = None
+
+  #define methods below
+  def fit(self, X):
+    assert isinstance(X, pd.core.frame.DataFrame), f'expected Dataframe but got {type(X)} instead.'
+    assert self.target_column in X.columns.to_list(), f'{self.__class__.__name__}.transform unknown column "{self.target_column}"'  #column legit?
+
+    q1 = X[self.target_column].quantile(0.25)
+    q3 = X[self.target_column].quantile(0.75)
+    iqr = q3-q1
+    # inner fence
+    inner_low = q1 - (1.5*iqr)
+    inner_high = q3 + (1.5*iqr)
+    self.inner = (inner_low, inner_high)
+    # outer fence
+    outer_low = q1 - (3*iqr)
+    outer_high = q3 + (3*iqr)
+    self.outer = (outer_low, outer_high)
+
+    return self
+
+  def transform(self, X):
+    assert self.inner != None, f'NotFittedError: This {self.__class__.__name__} instance is not fitted yet. Call "fit" with appropriate arguments before using this estimator.'
+    # unpack user specified fence
+    minb, maxb = self.inner if self.fence == "inner" else self.outer
+    X_ = X.copy()
+    X_[self.target_column] = X[self.target_column].clip(lower=minb, upper=maxb)
+    X_.reset_index(drop=True, inplace=True)
+    return X_
+
+  def fit_transform(self, X, y=None):
+    self.fit(X)
+    result = self.transform(X)
+    return result
