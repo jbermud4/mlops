@@ -1,7 +1,7 @@
 """
 Author: Jan Bermudez
 Description: A library for pandas data frame transformers
-Last Modified: 10/15/2023
+Last Modified: 10/16/2023
 """
 import pandas as pd
 import numpy as np
@@ -10,8 +10,8 @@ sklearn.set_config(transform_output="pandas")  #says pass pandas tables through 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import Pipeline
 
-
 ########################################################################################################################################################
+
 
 class CustomMappingTransformer(BaseEstimator, TransformerMixin):
 
@@ -61,6 +61,8 @@ class CustomMappingTransformer(BaseEstimator, TransformerMixin):
 
 ########################################################################################################################################################
 #This class will rename one or more columns.
+
+
 class CustomRenamingTransformer(BaseEstimator, TransformerMixin):
   # init method
   def __init__(self, mapping_dict:dict):
@@ -74,7 +76,6 @@ class CustomRenamingTransformer(BaseEstimator, TransformerMixin):
     print(f"\nWarning: {self.__class__.__name__}.fit does nothing.\n")
     return self
 
-  #write the transform method with asserts. Again, maybe copy and paste from MappingTransformer and fix up.
   def transform(self, X):
     assert isinstance(X, pd.core.frame.DataFrame), f'{self.__class__.__name__}.transform expected Dataframe but got {type(X)} instead.'
 
@@ -89,9 +90,7 @@ class CustomRenamingTransformer(BaseEstimator, TransformerMixin):
     X_ = X.copy()
     X_.rename(columns=self.mapping_dict, inplace=True)
     return X_
-
-
-  #write fit_transform that skips fit
+    
   def fit_transform(self, X, y = None):
     #self.fit(X,y)
     result = self.transform(X)
@@ -99,13 +98,13 @@ class CustomRenamingTransformer(BaseEstimator, TransformerMixin):
 
 ########################################################################################################################################################
 
+
 class CustomOHETransformer(BaseEstimator, TransformerMixin):
   def __init__(self, target_column, dummy_na=False, drop_first=False):
     self.target_column = target_column
     self.dummy_na = dummy_na
     self.drop_first = drop_first
 
-  #fill in the rest below
   def fit(self, X, y = None):
     print(f"\nWarning: {self.__class__.__name__}.fit does nothing.\n")
     return self
@@ -113,12 +112,6 @@ class CustomOHETransformer(BaseEstimator, TransformerMixin):
   def transform(self, X):
     assert isinstance(X, pd.core.frame.DataFrame), f'{self.__class__.__name__}.transform expected Dataframe but got {type(X)} instead.'
     assert self.target_column in X.columns.to_list(), f'{self.__class__.__name__}.transform unknown column "{self.target_column}"'  #column legit?
-
-# A bit confused when to wrangle NaN, the transformer seems to work without this code
-    #placeholder = "NaN"
-    #column_values = X[self.target_column].fillna(placeholder).tolist()  #convert all nan values to the string "NaN" in new list
-    #column_values = [np.nan if v == placeholder else v for v in column_values]  #now convert back to np.nan
-
     #do actual mapping
     X_ = X.copy()
     X_ = pd.get_dummies(X,
@@ -139,14 +132,14 @@ class CustomOHETransformer(BaseEstimator, TransformerMixin):
 
 ########################################################################################################################################################
 
+
 class CustomSigma3Transformer(BaseEstimator, TransformerMixin):
   def __init__(self, target_column):
     assert isinstance(target_column, str), f'expected str but got {type(target_column)} instead.'
     self.target_column = target_column
     self.bounds = None
 
-  #define methods below
-  def fit(self, X):
+  def fit(self, X, y = None):
     assert isinstance(X, pd.core.frame.DataFrame), f'expected Dataframe but got {type(X)} instead.'
     assert self.target_column in X.columns.to_list(), f'{self.__class__.__name__}.transform unknown column "{self.target_column}"'  #column legit?
     
@@ -165,12 +158,13 @@ class CustomSigma3Transformer(BaseEstimator, TransformerMixin):
     X_.reset_index(drop=True, inplace=True)
     return X_
 
-  def fit_transform(self, X):
+  def fit_transform(self, X, y = None):
     self.fit(X)
     result = self.transform(X)
     return result
 
 ########################################################################################################################################################
+
 
 class CustomTukeyTransformer(BaseEstimator, TransformerMixin):
   def __init__(self, target_column, fence='outer'):
@@ -181,11 +175,9 @@ class CustomTukeyTransformer(BaseEstimator, TransformerMixin):
     self.inner = None
     self.outer = None
 
-  #define methods below
-  def fit(self, X):
+  def fit(self, X, y = None):
     assert isinstance(X, pd.core.frame.DataFrame), f'expected Dataframe but got {type(X)} instead.'
     assert self.target_column in X.columns.to_list(), f'{self.__class__.__name__}.transform unknown column "{self.target_column}"'  #column legit?
-
     q1 = X[self.target_column].quantile(0.25)
     q3 = X[self.target_column].quantile(0.75)
     iqr = q3-q1
@@ -197,7 +189,7 @@ class CustomTukeyTransformer(BaseEstimator, TransformerMixin):
     outer_low = q1 - (3*iqr)
     outer_high = q3 + (3*iqr)
     self.outer = (outer_low, outer_high)
-
+    
     return self
 
   def transform(self, X):
@@ -209,7 +201,36 @@ class CustomTukeyTransformer(BaseEstimator, TransformerMixin):
     X_.reset_index(drop=True, inplace=True)
     return X_
 
-  def fit_transform(self, X, y=None):
+  def fit_transform(self, X, y = None):
     self.fit(X)
+    result = self.transform(X)
+    return result
+    
+########################################################################################################################################################
+
+
+class CustomRobustTransformer(BaseEstimator, TransformerMixin):
+  def __init__(self, column):
+    self.target_column = column
+    self.median = None
+    self.iqr = None
+
+  def fit(self, X, y = None):
+    self.median = X[self.target_column].median()
+    self.iqr = X[self.target_column].quantile(.75) - X[self.target_column].quantile(.25)
+    return self
+
+  def transform(self, X):
+    assert isinstance(X, pd.core.frame.DataFrame), f'{self.__class__.__name__}.transform expected Dataframe but got {type(X)} instead.'
+    assert self.median != None, f'NotFittedError: This {self.__class__.__name__} instance is not fitted yet. Call "fit" with appropriate arguments before using this estimator.'
+    assert self.target_column in X.columns.to_list(), f'{self.__class__.__name__}.transform unknown column "{self.target_column}"'  #column legit?
+    #do actual mapping
+    X_ = X.copy()
+    X_[self.target_column] -= self.median
+    X_[self.target_column] /= self.iqr
+    return X_
+
+  def fit_transform(self, X, y = None):
+    self.fit(X,y)
     result = self.transform(X)
     return result
