@@ -16,6 +16,7 @@ subprocess.call([sys.executable, '-m', 'pip', 'install', 'category_encoders'])  
 import category_encoders as ce
 from sklearn.neighbors import KNeighborsClassifier  #the KNN model
 from sklearn.metrics import f1_score
+import joblib
 
 titanic_variance_based_split = 107
 customer_variance_based_split = 113
@@ -48,7 +49,7 @@ class CustomMappingTransformer(BaseEstimator, TransformerMixin):
     column_set = set(column_values)  #without the conversion above, the set will fail to have np.nan values where they should be.
     keys_set = set(keys_values)      #this will have np.nan values where they should be so no conversion necessary.
 
-    #now check to see if all keys are contained in column.
+    #now check to see if all keys are contained in the column.
     keys_not_found = keys_set - column_set
     if keys_not_found:
       print(f"\nWarning: {self.__class__.__name__}[{self.mapping_column}] these mapping keys do not appear in the column: {keys_not_found}\n")
@@ -95,7 +96,7 @@ class CustomRenamingTransformer(BaseEstimator, TransformerMixin):
 
     assert len(keys_not_found) == 0, f'{self.__class__.__name__}.transform unknown column(s) "{keys_not_found}"'  #columns legit?
 
-    #do actual mapping
+    #do the actual mapping
     X_ = X.copy()
     X_.rename(columns=self.mapping_dict, inplace=True)
     return X_
@@ -121,7 +122,7 @@ class CustomOHETransformer(BaseEstimator, TransformerMixin):
   def transform(self, X):
     assert isinstance(X, pd.core.frame.DataFrame), f'{self.__class__.__name__}.transform expected Dataframe but got {type(X)} instead.'
     assert self.target_column in X.columns.to_list(), f'{self.__class__.__name__}.transform unknown column "{self.target_column}"'  #column legit?
-    #do actual mapping
+    #do the actual mapping
     X_ = X.copy()
     X_ = pd.get_dummies(X,
                         prefix=str(self.target_column),
@@ -233,7 +234,7 @@ class CustomRobustTransformer(BaseEstimator, TransformerMixin):
     assert isinstance(X, pd.core.frame.DataFrame), f'{self.__class__.__name__}.transform expected Dataframe but got {type(X)} instead.'
     assert self.median != None, f'NotFittedError: This {self.__class__.__name__} instance is not fitted yet. Call "fit" with appropriate arguments before using this estimator.'
     assert self.target_column in X.columns.to_list(), f'{self.__class__.__name__}.transform unknown column "{self.target_column}"'  #column legit?
-    #do actual mapping
+    #do the actual mapping
     X_ = X.copy()
     X_[self.target_column] -= self.median
     X_[self.target_column] /= self.iqr
@@ -245,7 +246,6 @@ class CustomRobustTransformer(BaseEstimator, TransformerMixin):
     return result
 
 ########################################################################################################################################################
-
 
 def find_random_state(features_df, labels, n=200):
   var = []  #collect test_error/train_error where error based on F1 score
@@ -262,3 +262,45 @@ def find_random_state(features_df, labels, n=200):
     var.append(f1_ratio)
   rs_value = sum(var)/len(var)  #get average ratio value
   return np.array(abs(var - rs_value)).argmin()
+
+########################################################################################################################################################
+
+
+titanic_transformer = Pipeline(steps=[
+    ('map_gender', CustomMappingTransformer('Gender', {'Male': 0, 'Female': 1})),
+    ('map_class', CustomMappingTransformer('Class', {'Crew': 0, 'C3': 1, 'C2': 2, 'C1': 3})),
+    ('target_joined', ce.TargetEncoder(cols=['Joined'],
+                           handle_missing='return_nan', #will use imputer later to fill in
+                           handle_unknown='return_nan'  #will use imputer later to fill in
+    )),
+    ('tukey_age', CustomTukeyTransformer(target_column='Age', fence='outer')),
+    ('tukey_fare', CustomTukeyTransformer(target_column='Fare', fence='outer')),
+    ('scale_age', CustomRobustTransformer('Age')),  #from chapter 5
+    ('scale_fare', CustomRobustTransformer('Fare')),  #from chapter 5
+    ('imputer', KNNImputer(n_neighbors=5, weights="uniform", add_indicator=False))  #from chapter 6
+    ], verbose=True)
+
+########################################################################################################################################################
+
+
+customer_transformer = Pipeline(steps=[
+    ('map_os', CustomMappingTransformer('OS', {'Android': 0, 'iOS': 1})),
+    ('target_isp', ce.TargetEncoder(cols=['ISP'],
+                           handle_missing='return_nan', #will use imputer later to fill in
+                           handle_unknown='return_nan'  #will use imputer later to fill in
+    )),
+    ('map_level', CustomMappingTransformer('Experience Level', {'low': 0, 'medium': 1, 'high':2})),
+    ('map_gender', CustomMappingTransformer('Gender', {'Male': 0, 'Female': 1})),
+    ('tukey_age', CustomTukeyTransformer('Age', 'inner')),  #from chapter 4
+    ('tukey_time spent', CustomTukeyTransformer('Time Spent', 'inner')),  #from chapter 4
+    ('scale_age', CustomRobustTransformer('Age')), #from 5
+    ('scale_time spent', CustomRobustTransformer('Time Spent')), #from 5
+    ('impute', KNNImputer(n_neighbors=5, weights="uniform", add_indicator=False)),
+    ], verbose=True)
+
+########################################################################################################################################################
+
+fitted_pipeline = titanic_transformer.fit(X_train, y_train)  #notice just fit method called
+joblib.dump(fitted_pipeline, 'fitted_pipeline.pkl')
+
+########################################################################################################################################################
