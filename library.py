@@ -1,7 +1,7 @@
 """
 Author: Jan Bermudez
 Description: A library for pandas data frame transformers
-Last Modified: 10/16/2023
+Last Modified: 10/24/2023
 """
 import pandas as pd
 import numpy as np
