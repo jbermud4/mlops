@@ -17,6 +17,8 @@ import category_encoders as ce
 from sklearn.neighbors import KNeighborsClassifier  #the KNN model
 from sklearn.metrics import f1_score
 
+titanic_variance_based_split = 107
+customer_variance_based_split = 113
 ########################################################################################################################################################
 
 
