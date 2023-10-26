@@ -300,7 +300,7 @@ customer_transformer = Pipeline(steps=[
 
 ########################################################################################################################################################
 
-fitted_pipeline = titanic_transformer.fit(X_train, y_train)  #notice just fit method called
-joblib.dump(fitted_pipeline, 'fitted_pipeline.pkl')
+#fitted_pipeline = titanic_transformer.fit(X_train, y_train)  #notice just fit method called
+#joblib.dump(fitted_pipeline, 'fitted_pipeline.pkl')
 
 ########################################################################################################################################################
