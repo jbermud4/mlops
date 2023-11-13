@@ -17,6 +17,7 @@ subprocess.call([sys.executable, '-m', 'pip', 'install', 'category_encoders'])  
 import category_encoders as ce
 from sklearn.neighbors import KNeighborsClassifier  #the KNN model
 from sklearn.model_selection import train_test_split
+from sklearn.experimental import enable_halving_search_cv
 from sklearn.model_selection import HalvingGridSearchCV
 from sklearn.metrics import f1_score
 import joblib
